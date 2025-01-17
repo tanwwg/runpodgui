@@ -78,10 +78,15 @@ enum RunpodStatus {
                 if let r = pod.runtime, let pub = r.ports.first(where: { $0.isIpPublic }) {
                     self.status = .started(ip: pub.ip, port: pub.publicPort)
                     
+                    // wait 3 seconds for SSH to start up
+                    try await Task.sleep(for: .seconds(3))
+                    
                     startMonitor()
                     try openTerminalAndRunCommand(command: "ssh -L 127.0.0.1:8188:127.0.0.1:8188 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@\(pub.ip) -p \(pub.publicPort)")
                     
                     return
+                } else {
+                    try await Task.sleep(for: .seconds(1))
                 }
             }
             
