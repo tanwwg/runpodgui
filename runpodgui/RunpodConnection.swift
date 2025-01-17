@@ -177,8 +177,8 @@ enum RunpodStatus {
         var error: NSDictionary?
         guard let script = NSAppleScript(source: appleScript) else { throw RunpodError.unknownError }
         script.executeAndReturnError(&error)
-        if error != nil {
-            print("AppleScript Error: \(error)")
+        if let err = error {
+            print("AppleScript Error: \(err)")
             throw RunpodError.unknownError
         }
     }

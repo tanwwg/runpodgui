@@ -31,6 +31,8 @@ struct ContentView: View {
 struct ConnectionView: View {
     var conn: RunpodConnection
     
+    @State var lastError: String? = nil
+    
     var body: some View {
         VStack {
             Text(conn.config.podId)
@@ -38,12 +40,16 @@ struct ConnectionView: View {
             Text("Monitoring: \(conn.isMonitor)")
             Text("GPU Usage: \(conn.lastGpuUsage ?? -1)")
             Text("Idle minutes: \(conn.idleMinutes)")
+            if let err = lastError {
+                Text(err)
+                    .foregroundStyle(Color.red)
+            }
             
             Button(action: { Task {
                 do {
                     try await conn.startPod()
                 } catch {
-                    print(error)
+                    lastError = error.localizedDescription
                 }
             } }) {
                 Text("Start")
@@ -54,7 +60,7 @@ struct ConnectionView: View {
                     do {
                         try await conn.stopPod()
                     } catch {
-                        print(error)
+                        lastError = error.localizedDescription
                     }
                 } }) {
                     Text("Stop")
