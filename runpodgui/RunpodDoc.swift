@@ -14,26 +14,34 @@ extension UTType {
     }
 }
 
-struct runpodguiDocument: FileDocument {
-    var text: String
+struct RunpodConfig: Codable {
+    var apiHost: String = ""
+    var apiKey: String = ""
+    var podId: String = ""
+    var idleTimeMins = 60
+    var idleThreshold = 10
+}
 
-    init(text: String = "Hello, world!") {
-        self.text = text
-    }
+
+struct RunpodDoc: FileDocument {
+    var config: RunpodConfig
 
     static var readableContentTypes: [UTType] { [.exampleText] }
+    
+    init() {
+        config = RunpodConfig()
+    }
 
     init(configuration: ReadConfiguration) throws {
         guard let data = configuration.file.regularFileContents,
-              let string = String(data: data, encoding: .utf8)
+              let config = try? JSONDecoder().decode(RunpodConfig.self, from: data)
         else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        text = string
+        self.config = config
     }
     
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let data = text.data(using: .utf8)!
-        return .init(regularFileWithContents: data)
+        throw CocoaError(.fileWriteNoPermission)
     }
 }

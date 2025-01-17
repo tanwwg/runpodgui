@@ -10,7 +10,7 @@ import SwiftUI
 @main
 struct runpodguiApp: App {
     var body: some Scene {
-        DocumentGroup(newDocument: runpodguiDocument()) { file in
+        DocumentGroup(newDocument: RunpodDoc()) { file in
             ContentView(document: file.$document)
         }
     }

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Your description of why this app needs access to automate Terminal.</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -24,13 +26,15 @@
 			</array>
 			<key>UTTypeDescription</key>
 			<string>Example Text</string>
+			<key>UTTypeIcons</key>
+			<dict/>
 			<key>UTTypeIdentifier</key>
 			<string>com.example.plain-text</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
-					<string>exampletext</string>
+					<string>json</string>
 				</array>
 			</dict>
 		</dict>
