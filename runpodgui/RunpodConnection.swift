@@ -34,6 +34,9 @@ enum RunpodStatus {
     var idleMinutes = 0
     var monitorTask: Task<Void, any Error>?
     
+    var startTerminal = true
+    var terminalCmd: String?
+    
     var isMonitor: Bool { monitorTask != nil }
     
     init(config: RunpodConfig) {
@@ -84,7 +87,11 @@ enum RunpodStatus {
                     try await Task.sleep(for: .seconds(3))
                     
                     startMonitor()
-                    try openTerminalAndRunCommand(command: "ssh -L 127.0.0.1:8188:127.0.0.1:8188 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@\(pub.ip) -p \(pub.publicPort)")
+                    
+                    self.terminalCmd = "ssh -L 127.0.0.1:8188:127.0.0.1:8188 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@\(pub.ip) -p \(pub.publicPort)"
+                    if startTerminal {
+                        try openTerminalAndRunCommand(command: terminalCmd ?? "")
+                    }
                     
                     return
                 } else {
@@ -104,6 +111,10 @@ enum RunpodStatus {
         
         self.monitorTask?.cancel()
         self.monitorTask = nil
+        self.terminalCmd = nil
+        self.startIdleTime = nil
+        self.idleMinutes = 0
+        self.lastGpuUsage = nil
     }
     
     func startMonitor() {

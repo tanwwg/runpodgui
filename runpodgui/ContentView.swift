@@ -29,20 +29,30 @@ struct ContentView: View {
 }
 
 struct ConnectionView: View {
-    var conn: RunpodConnection
+    @Bindable var conn: RunpodConnection
     
     @State var lastError: String? = nil
     
     var body: some View {
-        VStack {
+        VStack(alignment: .leading) {
             Text(conn.config.podId)
             Text(String(describing: conn.status))
             Text("Monitoring: \(conn.isMonitor)")
             Text("GPU Usage: \(conn.lastGpuUsage ?? -1)")
             Text("Idle minutes: \(conn.idleMinutes)")
+            
+            if let term = conn.terminalCmd {
+                Text(term)
+                    .textSelection(.enabled)
+            }
+            
             if let err = lastError {
                 Text(err)
                     .foregroundStyle(Color.red)
+            }
+            
+            Toggle(isOn: $conn.startTerminal) {
+                Text("Open Terminal")
             }
             
             Button(action: { Task {
