@@ -32,7 +32,9 @@ enum RunpodStatus {
     var lastGpuUsage: Int?
     var startIdleTime: Date?
     var idleMinutes = 0
-    var isMonitor = false
+    var monitorTask: Task<Void, any Error>?
+    
+    var isMonitor: Bool { monitorTask != nil }
     
     init(config: RunpodConfig) {
         self.config = config
@@ -99,38 +101,33 @@ enum RunpodStatus {
     func stopPod() async throws {
         _ = try await query(query: "mutation stopPod($podId: String!) { podStop(input: {podId: $podId}) { id desiredStatus lastStatusChange } }", vars: [ "podId": config.podId ])
         self.status = .notStarted
+        
+        self.monitorTask?.cancel()
+        self.monitorTask = nil
     }
     
     func startMonitor() {
-        Task {
-            self.isMonitor = true
+        self.monitorTask = Task {
             while true {
-                do {
-                    if !self.isStarted { break }
-                    
-                    let usage = try checkGpuUsage()
-                    let now = Date.now
-                    self.lastGpuUsage = usage
-                    if usage < config.idleThreshold {
-                        if self.startIdleTime == nil {
-                            self.startIdleTime = now
-                        }
-                        self.idleMinutes = Int(now.timeIntervalSince(self.startIdleTime!) / 60)
-                        if idleMinutes > config.idleTimeMins {
-                            try await stopPod()
-                            break
-                        }
-                    } else {
-                        self.startIdleTime = nil
-                        self.idleMinutes = 0
+                guard let usage = try? checkGpuUsage() else { continue }
+                let now = Date.now
+                self.lastGpuUsage = usage
+                if usage < config.idleThreshold {
+                    if self.startIdleTime == nil {
+                        self.startIdleTime = now
                     }
-                    
-                    try await Task.sleep(for: .seconds(60))
-                } catch {
-                    print("Unable to check usage")
+                    self.idleMinutes = Int(now.timeIntervalSince(self.startIdleTime!) / 60)
+                    if idleMinutes > config.idleTimeMins {
+                        try await stopPod()
+                        break
+                    }
+                } else {
+                    self.startIdleTime = nil
+                    self.idleMinutes = 0
                 }
+                
+                try await Task.sleep(for: .seconds(60))
             }
-            self.isMonitor = false
         }
     }
     
