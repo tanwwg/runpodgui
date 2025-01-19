@@ -75,7 +75,13 @@ enum RunpodStatus {
     func startPod() async throws {
         status = .starting
         do {
-            _ = try await query(query: "mutation podResume($podId: String!) { podResume(input: {podId: $podId}) { id costPerHr desiredStatus lastStatusChange } }", vars: [ "podId": config.podId ])
+            if let bid = config.bid {
+                _ = try exec(command: "/opt/homebrew/bin/runpodctl", args: [
+                    "start", "pod", config.podId, "--bid", bid
+                ])
+            } else {
+                _ = try await query(query: "mutation podResume($podId: String!) { podResume(input: {podId: $podId}) { id costPerHr desiredStatus lastStatusChange } }", vars: [ "podId": config.podId ])
+            }
             
             while true {
                 let pods = try await getPods()
@@ -151,24 +157,17 @@ enum RunpodStatus {
         }
     }
     
-    func runSSHCommand(command: String) throws -> String {
+    func exec(command: String, args: [String]) throws -> String {
         let process = Process()
         let pipe = Pipe()
         
-        guard case let .started(ip, port) = status else {
-            throw RunpodError.unknownError
-        }
-
+        print("exec \(command) \(args.joined(separator: " "))")
+        
         // Configure the process
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR",
-            "root@\(ip)", "-p", "\(port)",
-            command]
+        process.executableURL = URL(fileURLWithPath: command)
+        process.arguments = args
         process.standardOutput = pipe
-//        process.standardError = pipe
+        process.standardError = pipe
 
         try process.run()
         process.waitUntilExit()
@@ -177,6 +176,20 @@ enum RunpodStatus {
         let str = String(data: data, encoding: .utf8) ?? ""
         print(str)
         return str
+
+    }
+    
+    func runSSHCommand(command: String) throws -> String {
+        guard case let .started(ip, port) = status else {
+            throw RunpodError.unknownError
+        }
+        return try exec(command: "/usr/bin/ssh", args: [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "LogLevel=ERROR",
+            "root@\(ip)", "-p", "\(port)",
+            command
+        ])
     }
     
     func openTerminalAndRunCommand(command: String) throws {

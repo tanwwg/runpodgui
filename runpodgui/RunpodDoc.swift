@@ -20,6 +20,8 @@ struct RunpodConfig: Codable {
     var podId: String = ""
     var idleTimeMins = 60
     var idleThreshold = 10
+    
+    var bid: String?
 }
 
 
