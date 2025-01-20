@@ -92,7 +92,7 @@ enum RunpodStatus {
                     // wait 3 seconds for SSH to start up
                     try await Task.sleep(for: .seconds(3))
                     
-                    startMonitor()
+                    startMonitor(ip: pub.ip, port: pub.publicPort)
                     
                     self.terminalCmd = "ssh -L 127.0.0.1:8188:127.0.0.1:8188 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@\(pub.ip) -p \(pub.publicPort)"
                     if startTerminal {
@@ -123,24 +123,35 @@ enum RunpodStatus {
         self.lastGpuUsage = nil
     }
     
-    func startMonitor() {
-        self.monitorTask = Task {
+    /// Returns true if we should end the monitor
+    func reportGpuUsage(usage: Int) async throws -> Bool {
+        let now = Date.now
+        
+        self.lastGpuUsage = usage
+        if usage < config.idleThreshold {
+            if self.startIdleTime == nil {
+                self.startIdleTime = now
+            }
+            self.idleMinutes = Int(now.timeIntervalSince(self.startIdleTime!) / 60)
+            if idleMinutes > config.idleTimeMins {
+                try await stopPod()
+                return true
+            }
+        } else {
+            self.startIdleTime = nil
+            self.idleMinutes = 0
+        }
+        
+        return false
+    }
+    
+    func startMonitor(ip: String, port: Int) {
+        self.monitorTask = Task.detached {
             while true {
-                guard let usage = try? checkGpuUsage() else { continue }
-                let now = Date.now
-                self.lastGpuUsage = usage
-                if usage < config.idleThreshold {
-                    if self.startIdleTime == nil {
-                        self.startIdleTime = now
-                    }
-                    self.idleMinutes = Int(now.timeIntervalSince(self.startIdleTime!) / 60)
-                    if idleMinutes > config.idleTimeMins {
-                        try await stopPod()
-                        break
-                    }
-                } else {
-                    self.startIdleTime = nil
-                    self.idleMinutes = 0
+                guard let usage = try? checkGpuUsage(ip: ip, port: port) else { continue }
+                
+                if try await self.reportGpuUsage(usage: usage) {
+                    break
                 }
                 
                 try await Task.sleep(for: .seconds(60))
@@ -148,49 +159,7 @@ enum RunpodStatus {
         }
     }
     
-    func checkGpuUsage() throws -> Int {
-        let str = try runSSHCommand(command: "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits")
-        if let usage = Int(str.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return usage
-        } else {
-            throw RunpodError.unknownError
-        }
-    }
-    
-    func exec(command: String, args: [String]) throws -> String {
-        let process = Process()
-        let pipe = Pipe()
-        
-        print("exec \(command) \(args.joined(separator: " "))")
-        
-        // Configure the process
-        process.executableURL = URL(fileURLWithPath: command)
-        process.arguments = args
-        process.standardOutput = pipe
-        process.standardError = pipe
 
-        try process.run()
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let str = String(data: data, encoding: .utf8) ?? ""
-        print(str)
-        return str
-
-    }
-    
-    func runSSHCommand(command: String) throws -> String {
-        guard case let .started(ip, port) = status else {
-            throw RunpodError.unknownError
-        }
-        return try exec(command: "/usr/bin/ssh", args: [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR",
-            "root@\(ip)", "-p", "\(port)",
-            command
-        ])
-    }
     
     func openTerminalAndRunCommand(command: String) throws {
         let appleScript = """
@@ -264,4 +233,49 @@ struct Port: Codable {
     let privatePort: Int
     let publicPort: Int
     let PortType: String
+}
+
+
+func checkGpuUsage(ip: String, port: Int) throws -> Int {
+    let str = try runSSHCommand(ip: ip, port: port, command: "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits")
+    if let usage = Int(str.trimmingCharacters(in: .whitespacesAndNewlines)) {
+        return usage
+    } else {
+        throw RunpodError.unknownError
+    }
+}
+
+func exec(command: String, args: [String]) throws -> String {
+    let process = Process()
+    let pipe = Pipe()
+    
+    print("exec \(command) \(args.joined(separator: " "))")
+    
+    // Configure the process
+    process.executableURL = URL(fileURLWithPath: command)
+    process.arguments = args
+    process.standardOutput = pipe
+    process.standardError = pipe
+
+    try process.run()
+    process.waitUntilExit()
+    
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let str = String(data: data, encoding: .utf8) ?? ""
+    print(str)
+    return str
+
+}
+
+func runSSHCommand(ip: String, port: Int, command: String) throws -> String {
+//    guard case let .started(ip, port) = status else {
+//        throw RunpodError.unknownError
+//    }
+    return try exec(command: "/usr/bin/ssh", args: [
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "LogLevel=ERROR",
+        "root@\(ip)", "-p", "\(port)",
+        command
+    ])
 }
